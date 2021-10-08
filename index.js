@@ -61,6 +61,12 @@ const comandos = {
     console.log(media.filename);
   },
   teste(msg) {
+    XLSX = require("xlsx");
+    const workbook = XLSX.readFile("./teste_evento2.xlsx");
+    let worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const planilhaJson = XLSX.utils.sheet_to_json(worksheet);
+
+    /*
     const csv = require("csv-parser");
     fs.createReadStream("./archives/planilha.csv")
       .pipe(csv())
@@ -80,6 +86,7 @@ const comandos = {
       .on("end", () => {
         console.log("CSV file successfully processed");
       });
+      */
   },
   ping(msg) {
     msg.reply("pong");
