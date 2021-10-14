@@ -1,7 +1,8 @@
 const fs = require("fs");
+const XLSX = require("xlsx");
 const qrcode = require("qrcode-terminal");
 
-const { Client, MessageMedia } = require("whatsapp-web.js");
+const { Client } = require("whatsapp-web.js");
 
 const SESSION_FILE_PATH = "./session.json";
 
@@ -23,7 +24,7 @@ client.on("qr", (qr) => {
 });
 
 client.on("authenticated", (session) => {
-  // Save the session object however you prefer.
+  // Salva a sessão em arquivo.
   sessionData = session;
   fs.writeFile(SESSION_FILE_PATH, JSON.stringify(session), (err) => {
     if (err) {
@@ -37,87 +38,235 @@ client.on("auth_failure", (msg) => {
   console.error("AUTHENTICATION FAILURE", msg);
 });
 
+let planilha;
+const users = new Map();
+
 client.on("ready", () => {
-  console.log("Client is ready!");
+  try {
+    const workbook = XLSX.readFile("./archives/teste_evento2.xlsx");
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    planilha = XLSX.utils.sheet_to_json(worksheet);
+    planilha = planilha.filter((linha) => {
+      if (linha["EVENTOS"]) {
+        return linha;
+      }
+    });
+  } catch (error) {
+    console.log(error.message);
+  } finally {
+    console.log("Client is ready!");
+  }
 });
 
-function getRandomIntInclusive(min, max) {
-  min = Math.ceil(min);
-  max = Math.floor(max);
-  return Math.floor(Math.random() * (max - min + 1) + min); //The maximum is inclusive and the minimum is inclusive
-}
+// Funções de respostas
+const msgOrdemZero = (msg) => {
+  const fraseCumprimento = "Olá, tudo bem?";
+  client.sendMessage(msg.from, fraseCumprimento);
+};
 
-const comandos = {
-  casimito(msg) {
-    const numeroAleatorio = getRandomIntInclusive(1, 7);
-    const extensao =
-      numeroAleatorio === 3 || numeroAleatorio === 5 || numeroAleatorio === 7
-        ? ".mp4"
-        : ".jpg";
-    const media = MessageMedia.fromFilePath(
-      "./media/" + numeroAleatorio + extensao
-    );
-    client.sendMessage(msg.from, media);
-    console.log(media.filename);
-  },
-  teste(msg) {
-    XLSX = require("xlsx");
-    const workbook = XLSX.readFile("./teste_evento2.xlsx");
-    let worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const planilhaJson = XLSX.utils.sheet_to_json(worksheet);
+const msgOrdemUm = (planilha, msg) => {
+  const msgCabecalho = "Selecione um evento: \n\n";
+  const arrCumprimento = [msgCabecalho];
 
-    /*
-    const csv = require("csv-parser");
-    fs.createReadStream("./archives/planilha.csv")
-      .pipe(csv())
-      .on("data", (row) => {
-        console.log(row);
-        client.sendMessage(
-          msg.from,
-          row["Nome"] +
-            "\n" +
-            row["Data"] +
-            "- Ingresso: " +
-            row["Valor"] +
-            "\n Endereço: " +
-            row["Endereco"]
-        );
-      })
-      .on("end", () => {
-        console.log("CSV file successfully processed");
+  for (let i = 0; i < planilha.length; i++) {
+    arrCumprimento.push(i + 1 + " - " + planilha[i]["EVENTOS"] + "\n");
+  }
+
+  client.sendMessage(msg.from, arrCumprimento.join(""));
+};
+
+const msgOrdemDois = (planilha, msg) => {
+  try {
+    const regexNumero = /^\d+/;
+    let isNumeroEncontrado = regexNumero.test(msg.body.trim());
+    let numeroEncontrado = msg.body.trim().match(regexNumero);
+    if (numeroEncontrado) {
+      numeroEncontrado = numeroEncontrado[0];
+    }
+
+    if (
+      isNumeroEncontrado &&
+      0 < parseInt(numeroEncontrado) &&
+      parseInt(numeroEncontrado) <= planilha.length
+    ) {
+      const eventoSelecionado = planilha[numeroEncontrado - 1];
+
+      const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n\n`;
+      const arrDetalhesEvento = [msgCabecalho];
+
+      const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
+      keysFiltradas = keysDoEventoSelecionado.filter((key) => {
+        return key.toLowerCase() != "eventos";
       });
-      */
-  },
-  ping(msg) {
-    msg.reply("pong");
-  },
-  default: "Desculpa, comando inválido!",
+
+      keysFiltradas.forEach((key, index) => {
+        arrDetalhesEvento.push(index + 1 + " - " + key + "\n");
+      });
+      arrDetalhesEvento.push('\nDigite "voltar" para retornar aos eventos.');
+
+      return client.sendMessage(msg.from, arrDetalhesEvento.join(""));
+    } else if (isNumeroEncontrado) {
+      client.sendMessage(
+        msg.from,
+        "Desculpa, o número informado não corresponde a um evento"
+      );
+      return;
+    } else {
+      client.sendMessage(msg.from, "Desculpa, houve um erro na consulta.");
+      return;
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const dataHoraEvento = (eventoSelecionado) => {
+  const ExcelDateToJSDate = (d) => {
+    let date = new Date(Math.round((d - 25569) * 864e5));
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+    return date;
+  };
+
+  dataEvento = ExcelDateToJSDate(eventoSelecionado["DATA E HORA"]);
+
+  const diaDaSemana = [
+    "domingo",
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+  ];
+
+  const horaFormatada = dataEvento.getHours() + ":" + dataEvento.getMinutes();
+  const dataFormatada =
+    dataEvento.getDate() +
+    "/" +
+    parseInt(dataEvento.getMonth() + 1) +
+    "/" +
+    dataEvento.getFullYear();
+
+  return `O evento do ${eventoSelecionado["EVENTOS"]} será realizado ${
+    diaDaSemana[dataEvento.getDay()]
+  } no dia ${dataEventoFormatado} às ${horaEventoFormatada}h.`;
+};
+
+const localEvento = () => {};
+
+const precoIngressos = () => {};
+
+const msgOrdemTres = (eventoSelecionado, msg) => {
+  try {
+    const regexNumero = /^\d+/;
+    let isNumeroEncontrado = regexNumero.test(msg.body.trim());
+    let numeroEncontrado = msg.body.trim().match(regexNumero);
+    if (numeroEncontrado) {
+      numeroEncontrado = numeroEncontrado[0];
+    }
+
+    const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
+    let keysFiltradas = keysDoEventoSelecionado.filter((key) => {
+      return key.toLowerCase() != "eventos";
+    });
+
+    if (
+      isNumeroEncontrado &&
+      0 < parseInt(numeroEncontrado) &&
+      parseInt(numeroEncontrado) <= keysFiltradas.length
+    ) {
+      if (numeroEncontrado === 1) {
+        const fraseDataEvento = dataHoraEvento(eventoSelecionado);
+        client.sendMessage(msg.from, fraseDataEvento);
+      }
+      if (numeroEncontrado === 2) {
+        const fraseLocalEvento = `O evento do ${eventoSelecionado["EVENTOS"]} será realizado na ${eventoSelecionado["LOCAL"]}`;
+        client.sendMessage(msg.from, fraseLocalEvento);
+      }
+      if (numeroEncontrado === 3) {
+        const fraseIngressoAntecipado = `O ingresso antecipado custa R$ ${eventoSelecionado[
+          "INGRESSOS ANTECIPADOS"
+        ].toFixed(2)}`;
+        client.sendMessage(msg.from, fraseIngressoAntecipado);
+      }
+      if (numeroEncontrado === 4) {
+        const fraseIngressoNaHora = `O ingresso na hora vai custar R$ ${eventoSelecionado[
+          "INGRESSOS NA HORA"
+        ].toFixed(2)}`;
+        client.sendMessage(msg.from, fraseIngressoNaHora);
+      }
+      if (numeroEncontrado === 5) {
+        const frasePrecoCamarote = `O camarote está custando R$ ${eventoSelecionado[
+          "CAMAROTES"
+        ].toFixed(2)}`;
+        client.sendMessage(msg.from, frasePrecoCamarote);
+      }
+      if (numeroEncontrado === 6) {
+        let frasePrecoPromocional;
+        if (
+          eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"] != "" &&
+          eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"].toUpperCase() != "XXXXXX"
+        ) {
+          frasePrecoPromocional = `A entrada de aniversariantes custa ${eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"]}`;
+        } else {
+          frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}`;
+        }
+        client.sendMessage(msg.from, frasePrecoCamarote);
+      }
+    }
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 client.on("message", async (msg) => {
-  console.log("Mensagem recebida!", msg);
-  const comandoFunction = comandos[msg.body.trim().toLowerCase()];
-  if (comandoFunction) {
-    comandoFunction(msg);
+  console.log("Mensagem recebida!");
+
+  if (!users.has(msg.from) && msg.body.trim().toLowerCase() === "teste") {
+    users.set(msg.from, { ordem: 0 });
+
+    if (users.get(msg.from).ordem === 0) {
+      msgOrdemZero(msg);
+      users.set(msg.from, { ordem: users.get(msg.from).ordem + 1 });
+    }
+
+    if (users.get(msg.from).ordem === 1) {
+      msgOrdemUm(planilha, msg);
+      users.set(msg.from, { ordem: users.get(msg.from).ordem + 1 });
+    }
+  } else if (users.has(msg.from)) {
+    let ordem = users.get(msg.from).ordem;
+
+    const regexVoltar = /(volt)\w{0,3}$/i;
+    const conteudoDaMsg = msg.body.trim().toLowerCase();
+    const isVoltar = regexVoltar.test(conteudoDaMsg);
+
+    if (!isVoltar) {
+      ordem = users.get(msg.from).ordem;
+      if (ordem === 1) {
+        console.log("Entrou em !isVoltar e ordem 1");
+        msgOrdemUm(planilha, msg);
+        users.set(msg.from, { ordem: ordem + 1 });
+      }
+      if (ordem === 2) {
+        if (Boolean(msgOrdemDois(planilha, msg))) {
+          users.set(msg.from, { ordem: ordem + 1 });
+        }
+      }
+      if (ordem === 3) {
+        client.sendMessage(msg.from, "Ordem 3");
+      }
+    } else {
+      users.set(msg.from, { ordem: 1 });
+      ordem = users.get(msg.from).ordem;
+      if (ordem === 1) {
+        msgOrdemUm(planilha, msg);
+        users.set(msg.from, { ordem: ordem + 1 });
+      }
+    }
   } else {
-    console.log("Comando inválido");
+    return;
   }
-  /*
-  if (msg.body === "!casimito") {
-     const numeroAleatorio = getRandomIntInclusive(1, 7);
-    const extensao =
-      numeroAleatorio === 3 || numeroAleatorio === 5 || numeroAleatorio === 7
-        ? ".mp4"
-        : ".jpg";
-    const media = MessageMedia.fromFilePath(
-      "./media/" + numeroAleatorio + extensao
-    );
-    client.sendMessage(msg.from, media);
-    console.log(media.filename); 
-  } else {
-    console.log("Mensagem recebida", msg.body);
-  }
-  */
 });
 
 client.initialize();
