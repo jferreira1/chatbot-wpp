@@ -13,7 +13,7 @@ if (fs.existsSync(SESSION_FILE_PATH)) {
 
 const client = new Client({
   puppeteer: {
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: ["--no-sandbox"],
   },
   session: sessionData,
 });
