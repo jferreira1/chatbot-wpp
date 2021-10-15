@@ -6,16 +6,18 @@ const { Client } = require("whatsapp-web.js");
 
 const SESSION_FILE_PATH = "./session.json";
 
+/*
 let sessionData;
 if (fs.existsSync(SESSION_FILE_PATH)) {
   sessionData = require(SESSION_FILE_PATH);
 }
+*/
 
 const client = new Client({
   puppeteer: {
     args: ["--no-sandbox"],
   },
-  session: sessionData,
+  //session: sessionData,
 });
 
 client.on("qr", (qr) => {
@@ -24,12 +26,15 @@ client.on("qr", (qr) => {
 
 client.on("authenticated", (session) => {
   // Salva a sessão em arquivo.
+  /*
   sessionData = session;
+  
   fs.writeFile(SESSION_FILE_PATH, JSON.stringify(session), (err) => {
     if (err) {
       console.error(err);
     }
   });
+  */
 });
 
 client.on("auth_failure", (msg) => {
