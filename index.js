@@ -90,12 +90,10 @@ const msgOrdemDois = (planilha, msg) => {
       parseInt(numeroEncontrado) <= planilha.length
     ) {
       const eventoSelecionado = planilha[numeroEncontrado - 1];
-      console.log("User before evento", users.get(msg.from));
       users.set(msg.from, {
         ...users.get(msg.from),
         eventoSelecionado: eventoSelecionado,
       });
-      console.log("User after evento", users.get(msg.from));
 
       const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n\n`;
       const arrDetalhesEvento = [msgCabecalho];
@@ -160,7 +158,6 @@ const dataHoraEvento = (eventoSelecionado) => {
 
 const msgOrdemTres = (eventoSelecionado, msg) => {
   try {
-    console.log("Evento dentro da ordem 3", eventoSelecionado);
     const regexNumero = /^\d+/;
     let isNumeroEncontrado = regexNumero.test(msg.body.trim());
     let numeroEncontrado = msg.body.trim().match(regexNumero);
@@ -179,30 +176,29 @@ const msgOrdemTres = (eventoSelecionado, msg) => {
       numeroEncontrado <= keysFiltradas.length
     ) {
       if (numeroEncontrado === 1) {
-        console.log("Entrou em numero encontrado = 1");
         const fraseDataEvento = dataHoraEvento(eventoSelecionado);
         client.sendMessage(msg.from, fraseDataEvento);
       }
       if (numeroEncontrado === 2) {
-        const fraseLocalEvento = `O evento do ${eventoSelecionado["EVENTOS"]} será realizado na ${eventoSelecionado["LOCAL"]}`;
+        const fraseLocalEvento = `O evento do ${eventoSelecionado["EVENTOS"]} será realizado na ${eventoSelecionado["LOCAL"]}.`;
         client.sendMessage(msg.from, fraseLocalEvento);
       }
       if (numeroEncontrado === 3) {
         const fraseIngressoAntecipado = `O ingresso antecipado custa R$ ${eventoSelecionado[
           "INGRESSOS ANTECIPADOS"
-        ].toFixed(2)}`;
+        ].toFixed(2)}.`;
         client.sendMessage(msg.from, fraseIngressoAntecipado);
       }
       if (numeroEncontrado === 4) {
         const fraseIngressoNaHora = `O ingresso na hora vai custar R$ ${eventoSelecionado[
           "INGRESSOS NA HORA"
-        ].toFixed(2)}`;
+        ].toFixed(2)}.`;
         client.sendMessage(msg.from, fraseIngressoNaHora);
       }
       if (numeroEncontrado === 5) {
         const frasePrecoCamarote = `O camarote está custando R$ ${eventoSelecionado[
           "CAMAROTES"
-        ].toFixed(2)}`;
+        ].toFixed(2)}.`;
         client.sendMessage(msg.from, frasePrecoCamarote);
       }
       if (numeroEncontrado === 6) {
@@ -211,12 +207,17 @@ const msgOrdemTres = (eventoSelecionado, msg) => {
           eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"] != "" &&
           eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"].toUpperCase() != "XXXXXX"
         ) {
-          frasePrecoPromocional = `A entrada de aniversariantes custa ${eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"]}`;
+          frasePrecoPromocional = `A entrada de aniversariantes custa ${eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"]}.`;
         } else {
-          frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}`;
+          frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}.`;
         }
         client.sendMessage(msg.from, frasePrecoPromocional);
       }
+    } else {
+      client.sendMessage(
+        msg.from,
+        "Desculpa, o número informado não corresponde às opções."
+      );
     }
   } catch (error) {
     console.log(error);
@@ -248,7 +249,6 @@ client.on("message", async (msg) => {
     if (!isVoltar) {
       ordem = users.get(msg.from).ordem;
       if (ordem === 1) {
-        console.log("Entrou em !isVoltar e ordem 1");
         msgOrdemUm(planilha, msg);
         users.set(msg.from, { ordem: ordem + 1 });
       }
