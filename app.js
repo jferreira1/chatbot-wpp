@@ -2,6 +2,18 @@ const fs = require("fs");
 const XLSX = require("xlsx");
 const qrcode = require("qrcode-terminal");
 
+const express = require("express");
+const app = express();
+const port = 3000;
+
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
+
+app.listen(port, () => {
+  console.log(`Example app listening at http://localhost:${port}`);
+});
+
 const { Client } = require("whatsapp-web.js");
 
 const SESSION_FILE_PATH = "./session.json";
