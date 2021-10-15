@@ -90,6 +90,12 @@ const msgOrdemDois = (planilha, msg) => {
       parseInt(numeroEncontrado) <= planilha.length
     ) {
       const eventoSelecionado = planilha[numeroEncontrado - 1];
+      console.log("User before evento", users.get(msg.from));
+      users.set(msg.from, {
+        ...users.get(msg.from),
+        eventoSelecionado: eventoSelecionado,
+      });
+      console.log("User after evento", users.get(msg.from));
 
       const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n\n`;
       const arrDetalhesEvento = [msgCabecalho];
@@ -149,20 +155,17 @@ const dataHoraEvento = (eventoSelecionado) => {
 
   return `O evento do ${eventoSelecionado["EVENTOS"]} será realizado ${
     diaDaSemana[dataEvento.getDay()]
-  } no dia ${dataEventoFormatado} às ${horaEventoFormatada}h.`;
+  } no dia ${dataFormatada} às ${horaFormatada}h.`;
 };
-
-const localEvento = () => {};
-
-const precoIngressos = () => {};
 
 const msgOrdemTres = (eventoSelecionado, msg) => {
   try {
+    console.log("Evento dentro da ordem 3", eventoSelecionado);
     const regexNumero = /^\d+/;
     let isNumeroEncontrado = regexNumero.test(msg.body.trim());
     let numeroEncontrado = msg.body.trim().match(regexNumero);
     if (numeroEncontrado) {
-      numeroEncontrado = numeroEncontrado[0];
+      numeroEncontrado = parseInt(numeroEncontrado[0]);
     }
 
     const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
@@ -172,10 +175,11 @@ const msgOrdemTres = (eventoSelecionado, msg) => {
 
     if (
       isNumeroEncontrado &&
-      0 < parseInt(numeroEncontrado) &&
-      parseInt(numeroEncontrado) <= keysFiltradas.length
+      0 < numeroEncontrado &&
+      numeroEncontrado <= keysFiltradas.length
     ) {
       if (numeroEncontrado === 1) {
+        console.log("Entrou em numero encontrado = 1");
         const fraseDataEvento = dataHoraEvento(eventoSelecionado);
         client.sendMessage(msg.from, fraseDataEvento);
       }
@@ -211,11 +215,11 @@ const msgOrdemTres = (eventoSelecionado, msg) => {
         } else {
           frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}`;
         }
-        client.sendMessage(msg.from, frasePrecoCamarote);
+        client.sendMessage(msg.from, frasePrecoPromocional);
       }
     }
   } catch (error) {
-    console.log(error.message);
+    console.log(error);
   }
 };
 
@@ -250,11 +254,12 @@ client.on("message", async (msg) => {
       }
       if (ordem === 2) {
         if (Boolean(msgOrdemDois(planilha, msg))) {
-          users.set(msg.from, { ordem: ordem + 1 });
+          users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
         }
       }
       if (ordem === 3) {
-        client.sendMessage(msg.from, "Ordem 3");
+        console.log(users.get(msg.from));
+        msgOrdemTres(users.get(msg.from).eventoSelecionado, msg);
       }
     } else {
       users.set(msg.from, { ordem: 1 });
