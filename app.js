@@ -18,18 +18,16 @@ const { Client } = require("whatsapp-web.js");
 
 const SESSION_FILE_PATH = "./session.json";
 
-/*
 let sessionData;
 if (fs.existsSync(SESSION_FILE_PATH)) {
   sessionData = require(SESSION_FILE_PATH);
 }
-*/
 
 const client = new Client({
   puppeteer: {
     args: ["--no-sandbox"],
   },
-  //session: sessionData,
+  session: sessionData,
 });
 
 client.on("qr", (qr) => {
@@ -38,15 +36,14 @@ client.on("qr", (qr) => {
 
 client.on("authenticated", (session) => {
   // Salva a sessão em arquivo.
-  /*
+
   sessionData = session;
-  
+
   fs.writeFile(SESSION_FILE_PATH, JSON.stringify(session), (err) => {
     if (err) {
       console.error(err);
     }
   });
-  */
 });
 
 client.on("auth_failure", (msg) => {
@@ -88,7 +85,34 @@ const msgOrdemUm = (planilha, msg) => {
     arrCumprimento.push(i + 1 + " - " + planilha[i]["EVENTOS"] + "\n");
   }
 
-  client.sendMessage(msg.from, arrCumprimento.join(""));
+  // Limitador de quantidade de eventos apresentados na mensagem
+  let slicesCumprimentos = [];
+  for (let i = 0; i < arrCumprimento.length; i += 10) {
+    slicesCumprimentos.push(arrCumprimento.slice(i, (i += 10)));
+  }
+
+  let ordemEventos = users.get(msg.from).ordemEventos;
+
+  if (slicesCumprimentos[ordemEventos]) {
+    if (slicesCumprimentos[ordemEventos] + 1) {
+      client.sendMessage(
+        msg.from,
+        slicesCumprimentos[ordemEventos].join("") +
+          '\nDigite "mais" para ver mais eventos disponíveis.'
+      );
+      return;
+    } else {
+      client.sendMessage(msg.from, slicesCumprimentos[ordemEventos].join(""));
+      return;
+    }
+  } else {
+    users.set(msg.from, { ...users.get(msg.from), ordemEventos: 0 });
+    client.sendMessage(
+      msg.from,
+      slicesCumprimentos[users.get(msg.from).ordemEventos].join("")
+    );
+    return;
+  }
 };
 
 const msgOrdemDois = (planilha, msg) => {
@@ -243,30 +267,49 @@ const msgOrdemTres = (eventoSelecionado, msg) => {
 client.on("message", async (msg) => {
   console.log("Mensagem recebida!");
 
-  if (!users.has(msg.from) && msg.body.trim().toLowerCase() === "teste") {
-    users.set(msg.from, { ordem: 0 });
+  if (
+    !users.has(msg.from) &&
+    msg.body.trim().toLowerCase() === "teste" &&
+    !msg.type == "e2enotification"
+  ) {
+    users.set(msg.from, { ordem: 0, eventoSelecionado: null, ordemEventos: 0 });
 
     if (users.get(msg.from).ordem === 0) {
       msgOrdemZero(msg);
-      users.set(msg.from, { ordem: users.get(msg.from).ordem + 1 });
+      users.set(msg.from, {
+        ...users.get(msg.from),
+        ordem: users.get(msg.from).ordem + 1,
+      });
     }
 
     if (users.get(msg.from).ordem === 1) {
       msgOrdemUm(planilha, msg);
-      users.set(msg.from, { ordem: users.get(msg.from).ordem + 1 });
+      users.set(msg.from, {
+        ...users.get(msg.from),
+        ordem: users.get(msg.from).ordem + 1,
+      });
     }
   } else if (users.has(msg.from)) {
     let ordem = users.get(msg.from).ordem;
 
     const regexVoltar = /(volt)\w{0,3}$/i;
+    const regexMais = /((mais)|(\+)|(mostr))\w{0,3}/i;
     const conteudoDaMsg = msg.body.trim().toLowerCase();
     const isVoltar = regexVoltar.test(conteudoDaMsg);
+    const isMais = regexMais.test(conteudoDaMsg);
 
     if (!isVoltar) {
       ordem = users.get(msg.from).ordem;
       if (ordem === 1) {
+        if (isMais) {
+          ordemEventos = users.get(msg.from).ordemEventos;
+          users.set(msg.from, {
+            ...users.get(msg.from),
+            ordemEventos: ordemEventos + 1,
+          });
+        }
         msgOrdemUm(planilha, msg);
-        users.set(msg.from, { ordem: ordem + 1 });
+        users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
       }
       if (ordem === 2) {
         if (Boolean(msgOrdemDois(planilha, msg))) {
@@ -274,15 +317,18 @@ client.on("message", async (msg) => {
         }
       }
       if (ordem === 3) {
-        console.log(users.get(msg.from));
         msgOrdemTres(users.get(msg.from).eventoSelecionado, msg);
       }
     } else {
-      users.set(msg.from, { ordem: 1 });
+      users.set(msg.from, {
+        ordem: 1,
+        eventoSelecionado: null,
+        ordemEventos: 0,
+      });
       ordem = users.get(msg.from).ordem;
       if (ordem === 1) {
         msgOrdemUm(planilha, msg);
-        users.set(msg.from, { ordem: ordem + 1 });
+        users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
       }
     }
   } else {
