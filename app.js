@@ -1,8 +1,13 @@
 const fs = require("fs");
+
 const XLSX = require("xlsx");
 const qrcode = require("qrcode-terminal");
-
 const express = require("express");
+const { Client } = require("whatsapp-web.js");
+
+const respostas = require("./modules/respostas.js");
+const utils = require("./modules/util.js");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -13,8 +18,6 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 });
-
-const { Client } = require("whatsapp-web.js");
 
 const SESSION_FILE_PATH = "./session.json";
 
@@ -52,7 +55,7 @@ client.on("auth_failure", (msg) => {
 });
 
 let planilha;
-const users = new Map();
+let users = new Map();
 
 client.on("ready", () => {
   try {
@@ -71,265 +74,130 @@ client.on("ready", () => {
   }
 });
 
-// Funções de respostas
-const msgOrdemZero = (msg) => {
-  const fraseCumprimento = "Olá, tudo bem?";
-  client.sendMessage(msg.from, fraseCumprimento);
-};
-
-const msgOrdemUm = (planilha, msg) => {
-  const msgCabecalho = "Selecione um evento: \n\n";
-  const arrCumprimento = [msgCabecalho];
-
-  for (let i = 0; i < planilha.length; i++) {
-    arrCumprimento.push(i + 1 + " - " + planilha[i]["EVENTOS"] + "\n");
-  }
-
-  // Limitador de quantidade de eventos apresentados na mensagem
-  let slicesCumprimentos = [];
-  for (let i = 0; i < arrCumprimento.length; i += 10) {
-    slicesCumprimentos.push(arrCumprimento.slice(i, (i += 10)));
-  }
-
-  let ordemEventos = users.get(msg.from).ordemEventos;
-
-  if (slicesCumprimentos[ordemEventos]) {
-    if (slicesCumprimentos[ordemEventos] + 1) {
-      client.sendMessage(
-        msg.from,
-        slicesCumprimentos[ordemEventos].join("") +
-          '\nDigite "mais" para ver mais eventos disponíveis.'
-      );
-      return;
-    } else {
-      client.sendMessage(msg.from, slicesCumprimentos[ordemEventos].join(""));
-      return;
-    }
-  } else {
-    users.set(msg.from, { ...users.get(msg.from), ordemEventos: 0 });
-    client.sendMessage(
-      msg.from,
-      slicesCumprimentos[users.get(msg.from).ordemEventos].join("")
-    );
-    return;
-  }
-};
-
-const msgOrdemDois = (planilha, msg) => {
-  try {
-    const regexNumero = /^\d+/;
-    let isNumeroEncontrado = regexNumero.test(msg.body.trim());
-    let numeroEncontrado = msg.body.trim().match(regexNumero);
-    if (numeroEncontrado) {
-      numeroEncontrado = numeroEncontrado[0];
-    }
-
-    if (
-      isNumeroEncontrado &&
-      0 < parseInt(numeroEncontrado) &&
-      parseInt(numeroEncontrado) <= planilha.length
-    ) {
-      const eventoSelecionado = planilha[numeroEncontrado - 1];
-      users.set(msg.from, {
-        ...users.get(msg.from),
-        eventoSelecionado: eventoSelecionado,
-      });
-
-      const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n\n`;
-      const arrDetalhesEvento = [msgCabecalho];
-
-      const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
-      keysFiltradas = keysDoEventoSelecionado.filter((key) => {
-        return key.toLowerCase() != "eventos";
-      });
-
-      keysFiltradas.forEach((key, index) => {
-        arrDetalhesEvento.push(index + 1 + " - " + key + "\n");
-      });
-      arrDetalhesEvento.push('\nDigite "voltar" para retornar aos eventos.');
-
-      return client.sendMessage(msg.from, arrDetalhesEvento.join(""));
-    } else if (isNumeroEncontrado) {
-      client.sendMessage(
-        msg.from,
-        "Desculpa, o número informado não corresponde a um evento"
-      );
-      return;
-    } else {
-      client.sendMessage(msg.from, "Desculpa, houve um erro na consulta.");
-      return;
-    }
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-const dataHoraEvento = (eventoSelecionado) => {
-  const ExcelDateToJSDate = (d) => {
-    let date = new Date(Math.round((d - 25569) * 864e5));
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-    return date;
-  };
-
-  dataEvento = ExcelDateToJSDate(eventoSelecionado["DATA E HORA"]);
-
-  const diaDaSemana = [
-    "domingo",
-    "segunda-feira",
-    "terça-feira",
-    "quarta-feira",
-    "quinta-feira",
-    "sexta-feira",
-    "sábado",
-  ];
-
-  const horaFormatada = dataEvento.getHours() + ":" + dataEvento.getMinutes();
-  const dataFormatada =
-    dataEvento.getDate() +
-    "/" +
-    parseInt(dataEvento.getMonth() + 1) +
-    "/" +
-    dataEvento.getFullYear();
-
-  return `O evento do ${eventoSelecionado["EVENTOS"]} será realizado ${
-    diaDaSemana[dataEvento.getDay()]
-  } no dia ${dataFormatada} às ${horaFormatada}h.`;
-};
-
-const msgOrdemTres = (eventoSelecionado, msg) => {
-  try {
-    const regexNumero = /^\d+/;
-    let isNumeroEncontrado = regexNumero.test(msg.body.trim());
-    let numeroEncontrado = msg.body.trim().match(regexNumero);
-    if (numeroEncontrado) {
-      numeroEncontrado = parseInt(numeroEncontrado[0]);
-    }
-
-    const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
-    let keysFiltradas = keysDoEventoSelecionado.filter((key) => {
-      return key.toLowerCase() != "eventos";
-    });
-
-    if (
-      isNumeroEncontrado &&
-      0 < numeroEncontrado &&
-      numeroEncontrado <= keysFiltradas.length
-    ) {
-      if (numeroEncontrado === 1) {
-        const fraseDataEvento = dataHoraEvento(eventoSelecionado);
-        client.sendMessage(msg.from, fraseDataEvento);
-      }
-      if (numeroEncontrado === 2) {
-        const fraseLocalEvento = `O evento do ${eventoSelecionado["EVENTOS"]} será realizado na ${eventoSelecionado["LOCAL"]}.`;
-        client.sendMessage(msg.from, fraseLocalEvento);
-      }
-      if (numeroEncontrado === 3) {
-        const fraseIngressoAntecipado = `O ingresso antecipado custa R$ ${eventoSelecionado[
-          "INGRESSOS ANTECIPADOS"
-        ].toFixed(2)}.`;
-        client.sendMessage(msg.from, fraseIngressoAntecipado);
-      }
-      if (numeroEncontrado === 4) {
-        const fraseIngressoNaHora = `O ingresso na hora vai custar R$ ${eventoSelecionado[
-          "INGRESSOS NA HORA"
-        ].toFixed(2)}.`;
-        client.sendMessage(msg.from, fraseIngressoNaHora);
-      }
-      if (numeroEncontrado === 5) {
-        const frasePrecoCamarote = `O camarote está custando R$ ${eventoSelecionado[
-          "CAMAROTES"
-        ].toFixed(2)}.`;
-        client.sendMessage(msg.from, frasePrecoCamarote);
-      }
-      if (numeroEncontrado === 6) {
-        let frasePrecoPromocional;
-        if (
-          eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"] != "" &&
-          eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"].toUpperCase() != "XXXXXX"
-        ) {
-          frasePrecoPromocional = `A entrada de aniversariantes custa ${eventoSelecionado["PROMOÇÃO ANIVERSARIANTE"]}.`;
-        } else {
-          frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}.`;
-        }
-        client.sendMessage(msg.from, frasePrecoPromocional);
-      }
-    } else {
-      client.sendMessage(
-        msg.from,
-        "Desculpa, o número informado não corresponde às opções."
-      );
-    }
-  } catch (error) {
-    console.log(error);
-  }
-};
-
 client.on("message", async (msg) => {
   console.log("Mensagem recebida!");
 
-  if (
-    !users.has(msg.from) &&
-    msg.body.trim().toLowerCase() === "teste" &&
-    !msg.type == "e2enotification"
-  ) {
-    users.set(msg.from, { ordem: 0, eventoSelecionado: null, ordemEventos: 0 });
+  isUserRegistred = users.has(msg.from);
+  isMessageTest = Boolean(msg.body.trim().toLowerCase() === "teste");
+  isE2Notification = Boolean(msg.type == "e2enotification");
 
-    if (users.get(msg.from).ordem === 0) {
-      msgOrdemZero(msg);
-      users.set(msg.from, {
-        ...users.get(msg.from),
-        ordem: users.get(msg.from).ordem + 1,
-      });
+  if (!isUserRegistred && isMessageTest) {
+    console.log("Entrou em 'teste'!");
+
+    users.set(msg.from, {
+      ordem: 0,
+      eventoSelecionado: null,
+      ordemEventos: 0,
+      isSubgrupoIngressos: false,
+    });
+
+    let userCurrentOrdem = users.get(msg.from).ordem;
+    if (userCurrentOrdem === 0) {
+      let resposta;
+      resposta = respostas.msgOrdemZero(msg);
+      client.sendMessage(msg.from, resposta);
+      utils.incrementaOrdemUser(msg.from, users);
     }
 
     if (users.get(msg.from).ordem === 1) {
-      msgOrdemUm(planilha, msg);
-      users.set(msg.from, {
-        ...users.get(msg.from),
-        ordem: users.get(msg.from).ordem + 1,
+      let resposta;
+      [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
+      client
+        .sendMessage(msg.from, resposta)
+        .then(utils.incrementaOrdemUser(msg.from, users));
+    }
+  } else if (isUserRegistred) {
+    let userCurrentOrdem = users.get(msg.from).ordem;
+    const conteudoDaMsgMin = msg.body.trim().toLowerCase();
+
+    const regexVoltar = /^((volt)|(votl))\w{0,3}$/i;
+    const regexMais = /^((mais)|(mas))$/i;
+    const regexMenu = /^((menu)|(princip))\w{0,3}$/i;
+
+    const isVoltar = regexVoltar.test(conteudoDaMsgMin);
+    const isMais = regexMais.test(conteudoDaMsgMin);
+    const isMenu = regexMenu.test(conteudoDaMsgMin);
+
+    let isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
+
+    if (isMenu) {
+      users = utils.resetUser(msg.from, users);
+    }
+    if (isVoltar || (userCurrentOrdem === 4 && !isSubgrupoIngressos)) {
+      userCurrentOrdem = users.get(msg.from).ordem;
+      if (userCurrentOrdem === 2) {
+        users = utils.decrementaOrdemUser(msg.from, users);
+        users = utils.decrementaOrdemEventos(msg.from, users);
+      }
+      if (userCurrentOrdem === 3) {
+        let currentOrdemEventos = users.get(msg.from).ordemEventos;
+        users = utils.decrementaOrdemUser(msg.from, users, 2);
+        users = utils.decrementaOrdemEventos(
+          msg.from,
+          users,
+          currentOrdemEventos
+        );
+        users.set(msg.from, {
+          ...users.get(msg.from),
+          eventoSelecionado: null,
+        });
+      }
+
+      if (userCurrentOrdem === 4) {
+        users = utils.decrementaOrdemUser(msg.from, users, 2);
+      }
+    }
+
+    userCurrentOrdem = users.get(msg.from).ordem;
+    let eventoSelecionado = users.get(msg.from).eventoSelecionado;
+
+    if (userCurrentOrdem === 1) {
+      let resposta;
+      [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
+      client
+        .sendMessage(msg.from, resposta)
+        .then(utils.incrementaOrdemUser(msg.from, users));
+    }
+    if (userCurrentOrdem === 2) {
+      if (isMais) {
+        utils.decrementaOrdemUser(msg.from, users);
+        utils.incrementaOrdemEventos(msg.from, users);
+        let resposta;
+        [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
+        client
+          .sendMessage(msg.from, resposta)
+          .then(utils.incrementaOrdemUser(msg.from, users));
+      } else {
+        let resposta;
+        [resposta, users] = respostas.msgOrdemDois(planilha, msg, users);
+        client
+          .sendMessage(msg.from, resposta)
+          .then(utils.incrementaOrdemUser(msg.from, users));
+      }
+    }
+    if (userCurrentOrdem === 3) {
+      let resposta;
+      [resposta, users] = respostas.msgOrdemTres(eventoSelecionado, msg, users);
+      client.sendMessage(msg.from, resposta).then((msgSent) => {
+        utils.incrementaOrdemUser(msg.from, users);
+        msgSent.reply(respostas.msgVoltarEMenu(eventoSelecionado));
       });
     }
-  } else if (users.has(msg.from)) {
-    let ordem = users.get(msg.from).ordem;
-
-    const regexVoltar = /(volt)\w{0,3}$/i;
-    const regexMais = /((mais)|(\+)|(mostr))\w{0,3}/i;
-    const conteudoDaMsg = msg.body.trim().toLowerCase();
-    const isVoltar = regexVoltar.test(conteudoDaMsg);
-    const isMais = regexMais.test(conteudoDaMsg);
-
-    if (!isVoltar) {
-      ordem = users.get(msg.from).ordem;
-      if (ordem === 1) {
-        if (isMais) {
-          ordemEventos = users.get(msg.from).ordemEventos;
-          users.set(msg.from, {
-            ...users.get(msg.from),
-            ordemEventos: ordemEventos + 1,
+    if (userCurrentOrdem === 4) {
+      isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
+      if (isSubgrupoIngressos) {
+        [resposta, users] = respostas
+          .msgSubgrupoIngressos(eventoSelecionado, msg, users)
+          .then((msgSent) => {
+            msgSent.reply(respostas.msgVoltarEMenu(eventoSelecionado));
           });
-        }
-        msgOrdemUm(planilha, msg);
-        users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
       }
-      if (ordem === 2) {
-        if (Boolean(msgOrdemDois(planilha, msg))) {
-          users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
-        }
-      }
-      if (ordem === 3) {
-        msgOrdemTres(users.get(msg.from).eventoSelecionado, msg);
-      }
-    } else {
-      users.set(msg.from, {
-        ordem: 1,
-        eventoSelecionado: null,
-        ordemEventos: 0,
-      });
-      ordem = users.get(msg.from).ordem;
-      if (ordem === 1) {
-        msgOrdemUm(planilha, msg);
-        users.set(msg.from, { ...users.get(msg.from), ordem: ordem + 1 });
-      }
+
+      /*
+      let resposta;
+      resposta = respostas.msgOrdemQuatro(eventoSelecionado);
+      client.sendMessage(msg.from, resposta);
+      */
     }
   } else {
     return;
@@ -337,3 +205,5 @@ client.on("message", async (msg) => {
 });
 
 client.initialize();
+
+module.exports = { users };
