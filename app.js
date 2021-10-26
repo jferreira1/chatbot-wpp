@@ -75,15 +75,13 @@ client.on("ready", () => {
 });
 
 client.on("message", async (msg) => {
-  console.log("Mensagem recebida!");
+  console.log("Mensagem recebida!\n" + "Message type: " + msg.type);
 
   isUserRegistred = users.has(msg.from);
   isMessageTest = Boolean(msg.body.trim().toLowerCase() === "teste");
-  isE2Notification = Boolean(msg.type == "e2enotification");
+  //isE2Notification = Boolean(msg.type == "e2enotification");
 
   if (!isUserRegistred && isMessageTest) {
-    console.log("Entrou em 'teste'!");
-
     users.set(msg.from, {
       ordem: 0,
       eventoSelecionado: null,
@@ -145,6 +143,10 @@ client.on("message", async (msg) => {
 
       if (userCurrentOrdem === 4) {
         users = utils.decrementaOrdemUser(msg.from, users, 2);
+        users.set(users.get(msg.from), {
+          ...users.get(msg.from),
+          isSubgrupoIngressos: false,
+        });
       }
     }
 
@@ -164,6 +166,7 @@ client.on("message", async (msg) => {
         utils.incrementaOrdemEventos(msg.from, users);
         let resposta;
         [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
+
         client
           .sendMessage(msg.from, resposta)
           .then(utils.incrementaOrdemUser(msg.from, users));
@@ -172,7 +175,17 @@ client.on("message", async (msg) => {
         [resposta, users] = respostas.msgOrdemDois(planilha, msg, users);
         client
           .sendMessage(msg.from, resposta)
-          .then(utils.incrementaOrdemUser(msg.from, users));
+          .then((msgSent) => {
+            console.log(msgSent);
+            client.sendMessage(
+              msg.from,
+              'Digite "voltar" ou "menu" retornar ao menu principal e selecionar um novo evento.'
+            );
+            utils.incrementaOrdemUser(msg.from, users);
+          })
+          .catch((error) => {
+            console.log(error.message);
+          });
       }
     }
     if (userCurrentOrdem === 3) {
@@ -180,7 +193,10 @@ client.on("message", async (msg) => {
       [resposta, users] = respostas.msgOrdemTres(eventoSelecionado, msg, users);
       client.sendMessage(msg.from, resposta).then((msgSent) => {
         utils.incrementaOrdemUser(msg.from, users);
-        msgSent.reply(respostas.msgVoltarEMenu(eventoSelecionado));
+        client.sendMessage(
+          msg.from,
+          respostas.msgVoltarEMenu(eventoSelecionado)
+        );
       });
     }
     if (userCurrentOrdem === 4) {
@@ -189,7 +205,10 @@ client.on("message", async (msg) => {
         [resposta, users] = respostas
           .msgSubgrupoIngressos(eventoSelecionado, msg, users)
           .then((msgSent) => {
-            msgSent.reply(respostas.msgVoltarEMenu(eventoSelecionado));
+            client.sendMessage(
+              msg.from,
+              respostas.msgVoltarEMenu(eventoSelecionado)
+            );
           });
       }
 

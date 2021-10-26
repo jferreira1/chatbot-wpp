@@ -5,6 +5,7 @@ const resetUser = (userKey, users) => {
     ordemEventos: 0,
     isSubgrupoIngressos: false,
   });
+  return users;
 };
 
 const incrementaOrdemUser = (userKey, users, increment = 1) => {

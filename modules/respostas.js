@@ -2,11 +2,12 @@ const frases = require("./frases.js");
 const utils = require("./util.js");
 
 const msgOrdemZero = (msg) => {
-  const fraseCumprimento = "Olá, tudo bem?";
+  const fraseCumprimento = "Olá, tudo bem?\n";
   return fraseCumprimento;
 };
 
 const msgOrdemUm = (planilha, msg, users) => {
+  let resposta;
   try {
     const msgCabecalho = "Selecione um evento: \n\n";
     const arrCumprimento = [msgCabecalho];
@@ -31,10 +32,8 @@ const msgOrdemUm = (planilha, msg, users) => {
           msgCabecalho +
           slicesCumprimentos[ordemEventos].join("") +
           '\nDigite "mais" para ver mais eventos disponíveis.';
-        return [resposta, users];
       } else {
         resposta = msgCabecalho + slicesCumprimentos[ordemEventos].join("");
-        return [resposta, users];
       }
     } else {
       users.set(msg.from, { ...users.get(msg.from), ordemEventos: 0 });
@@ -42,11 +41,14 @@ const msgOrdemUm = (planilha, msg, users) => {
     }
   } catch (error) {
     console.log(error);
-    return ["Desculpa, houve um erro na consulta.", users];
+    resposta = error.message;
+  } finally {
+    return [resposta, users];
   }
 };
 
 const msgOrdemDois = (planilha, msg, users) => {
+  let resposta;
   try {
     const regexNumero = /^\d+/;
 
@@ -67,32 +69,31 @@ const msgOrdemDois = (planilha, msg, users) => {
       });
 
       // Define mensagem de resposta
-      const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n\n`;
+      const msgCabecalho = `O que deseja saber sobre o evento do ${eventoSelecionado["EVENTOS"]}?\n`;
       const arrDetalhesEvento = [msgCabecalho];
 
       // Filtro de propriedades a serem oferecidas para o usuário
       propriedadesFiltradas = utils.filtroPropriedades(eventoSelecionado);
 
       propriedadesFiltradas.forEach((key, index) => {
-        arrDetalhesEvento.push(index + 1 + " - " + key + "\n");
+        arrDetalhesEvento.push("\n" + index + 1 + " - " + key);
       });
-
-      arrDetalhesEvento.push('\nDigite "voltar" para retornar aos eventos.');
-      return [arrDetalhesEvento.join(""), users];
+      resposta = arrDetalhesEvento.join("").trim();
     } else if (isNumeroEncontrado) {
-      return [
-        "Desculpa, o número informado não corresponde a um evento",
-        users,
-      ];
+      throw "Desculpa, o número informado não corresponde a um evento";
     } else {
-      return ["Desculpa, houve um erro na consulta.", users];
+      throw "Por favor, selecione um número correspondente às opções.";
     }
   } catch (error) {
     console.log(error);
+    resposta = error.message;
+  } finally {
+    return [resposta, users];
   }
 };
 
 const msgOrdemTres = (eventoSelecionado, msg, users) => {
+  let resposta;
   try {
     const regexNumero = /^\d+/;
     const isNumeroEncontrado = regexNumero.test(msg.body.trim());
@@ -109,28 +110,28 @@ const msgOrdemTres = (eventoSelecionado, msg, users) => {
       // Data e Hora
       if (numeroEncontrado === 1) {
         const fraseDataEvento = frases.dataHoraEvento(eventoSelecionado);
-        return [fraseDataEvento, users];
+        resposta = fraseDataEvento;
       }
       // Local
       if (numeroEncontrado === 2) {
         const fraseLocalEvento = `O evento do ${eventoSelecionado["EVENTOS"]} será realizado na ${eventoSelecionado["LOCAL"]}.`;
-        return [fraseLocalEvento, users];
+        resposta = fraseLocalEvento;
       }
       // Ingressos
       if (numeroEncontrado === 3) {
         const fraseOpcoesIngressos =
           "Selecione o tipo de informação que deseja consultar:\n\n" +
           "1 - Valores antecipados\n" +
-          "2 - Valores na hora do evento\n";
+          "2 - Valores na hora do evento";
         utils.setSubgrupoIngressos(true);
-        return [fraseOpcoesIngressos, users];
+        resposta = fraseOpcoesIngressos;
       }
       // Camarotes
       if (numeroEncontrado === 4) {
         const frasePrecoCamarote = `O camarote está custando R$ ${eventoSelecionado[
           "CAMAROTES"
         ].toFixed(2)}.`;
-        return [frasePrecoCamarote, users];
+        resposta = frasePrecoCamarote;
       }
       // Promoção aniversariante
       if (numeroEncontrado === 5) {
@@ -143,17 +144,21 @@ const msgOrdemTres = (eventoSelecionado, msg, users) => {
         } else {
           frasePrecoPromocional = `Não há preço promocional disponível para o evento do ${eventoSelecionado["EVENTOS"]}.`;
         }
-        return [frasePrecoPromocional, users];
+        resposta = frasePrecoPromocional;
       }
     } else {
-      return ["Desculpa, o número informado não corresponde às opções.", users];
+      throw "Desculpa, o número informado não corresponde às opções.";
     }
   } catch (error) {
     console.log(error);
+    resposta = error.message;
+  } finally {
+    return [resposta, users];
   }
 };
 
 const msgSubgrupoIngressos = (eventoSelecionado, msg, users) => {
+  let resposta;
   try {
     const regexNumero = /^\d+/;
     const isNumeroEncontrado = regexNumero.test(msg.body.trim());
@@ -165,30 +170,41 @@ const msgSubgrupoIngressos = (eventoSelecionado, msg, users) => {
         const fraseIngressoAntecipado = `O ingresso antecipado custa R$ ${eventoSelecionado[
           "INGRESSOS ANTECIPADOS"
         ].toFixed(2)}.`;
-        return [fraseIngressoAntecipado, users];
+        resposta = fraseIngressoAntecipado;
       }
       if (numeroEncontrado === 2) {
         const fraseIngressoNaHora = `O ingresso na hora vai custar R$ ${eventoSelecionado[
           "INGRESSOS NA HORA"
         ].toFixed(2)}.`;
-        return [fraseIngressoNaHora, users];
+        resposta = fraseIngressoNaHora;
       } else {
-        return [
-          "Desculpa, o número informado não corresponde às opções disponíveis.",
-          users,
-        ];
+        throw "Desculpa, o número informado não corresponde às opções disponíveis.";
       }
     } else {
-      return ["Desculpa, houve um erro na consulta", users];
+      throw "Desculpa, houve um erro na consulta";
     }
   } catch (error) {
     console.log(error);
+    resposta = error.message;
+  } finally {
+    return [resposta, users];
   }
 };
 
 const msgVoltarEMenu = (eventoSelecionado) => {
-  resposta = `Digite "voltar" para ver mais informações do evento do ${eventoSelecionado["EVENTOS"]} ou digite "menu" retornar ao menu principal e selecionar um novo evento.`;
-  return [resposta, users];
+  let resposta;
+  try {
+    if (eventoSelecionado) {
+      resposta = `Digite "voltar" para ver mais informações do evento do ${eventoSelecionado["EVENTOS"]} ou digite "menu" retornar ao menu principal e selecionar um novo evento.`;
+    } else {
+      throw "Evento não encontrado";
+    }
+  } catch (error) {
+    console.log(error);
+    resposta = error.message;
+  } finally {
+    return [resposta, users];
+  }
 };
 
 module.exports = {
