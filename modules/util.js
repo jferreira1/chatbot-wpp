@@ -1,8 +1,9 @@
 const resetUser = (userKey, users) => {
   users.set(userKey, {
-    ordem: 1,
-    eventoSelecionado: null,
+    ordem: 0,
     ordemEventos: 0,
+    eventoSelecionado: null,
+    infoSelecionada: null,
     isSubgrupoIngressos: false,
   });
   return users;
@@ -48,7 +49,7 @@ const decrementaOrdemEventos = (userKey, users, decrement = 1) => {
 
 const setSubgrupoIngressos = (userKey, users, state) => {
   try {
-    if (typeof state === Boolean) {
+    if (typeof state === "boolean") {
       users.set(userKey, { ...users.get(userKey), isSubgrupoIngressos: state });
     } else {
       throw "Parâmetro 'state' não é um booleano";
@@ -75,6 +76,12 @@ const filtroPropriedades = (eventoSelecionado) => {
   return propriedadesFiltradas;
 };
 
+const filtroIngressos = (eventoSelecionado) => {
+  const keysDoEventoSelecionado = Object.keys(eventoSelecionado);
+  const ingressosFiltradsos = keysDoEventoSelecionado.slice(3, 5);
+  return ingressosFiltradsos;
+};
+
 module.exports = {
   resetUser,
   incrementaOrdemUser,
@@ -83,4 +90,5 @@ module.exports = {
   decrementaOrdemEventos,
   setSubgrupoIngressos,
   filtroPropriedades,
+  filtroIngressos,
 };

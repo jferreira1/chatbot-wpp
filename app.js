@@ -6,6 +6,8 @@ const express = require("express");
 const { Client } = require("whatsapp-web.js");
 
 const respostas = require("./modules/respostas.js");
+const validators = require("./modules/validators.js");
+const user = require("./modules/user.js");
 const utils = require("./modules/util.js");
 
 const app = express();
@@ -76,153 +78,167 @@ client.on("ready", () => {
 
 client.on("message", async (msg) => {
   console.log("Mensagem recebida!\n" + "Message type: " + msg.type);
+  console.log(msg.body);
 
-  isUserRegistred = users.has(msg.from);
-  isMessageTest = Boolean(msg.body.trim().toLowerCase() === "teste");
-  //isE2Notification = Boolean(msg.type == "e2enotification");
+  const isMessageValid = msg.type === "chat";
 
-  if (!isUserRegistred && isMessageTest) {
-    users.set(msg.from, {
-      ordem: 0,
-      eventoSelecionado: null,
-      ordemEventos: 0,
-      isSubgrupoIngressos: false,
-    });
+  if (isMessageValid) {
+    let isUserRegistred = users.has(msg.from);
+    let isMessageTest = msg.body.trim().toLowerCase() === "teste";
 
-    let userCurrentOrdem = users.get(msg.from).ordem;
-    if (userCurrentOrdem === 0) {
-      let resposta;
-      resposta = respostas.msgOrdemZero(msg);
-      client.sendMessage(msg.from, resposta);
-      utils.incrementaOrdemUser(msg.from, users);
+    if (!isUserRegistred && !isMessageTest) {
+      return;
     }
 
-    if (users.get(msg.from).ordem === 1) {
-      let resposta;
-      [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
-      client
-        .sendMessage(msg.from, resposta)
-        .then(utils.incrementaOrdemUser(msg.from, users));
+    if (!isUserRegistred && isMessageTest) {
+      // Registra usuário
+      users.set(msg.from, {
+        ordem: 0,
+        ordemEventos: 0,
+        eventoSelecionado: null,
+        infoSelecionada: null,
+        isSubgrupoIngressos: false,
+      });
+
+      // Manda mensagem de boas-vindas
+      let resposta = respostas.msgBoasVindas();
+      await client.sendMessage(msg.from, resposta);
     }
-  } else if (isUserRegistred) {
-    let userCurrentOrdem = users.get(msg.from).ordem;
-    const conteudoDaMsgMin = msg.body.trim().toLowerCase();
+    let eventoSelecionado;
 
-    const regexVoltar = /^((volt)|(votl))\w{0,3}$/i;
-    const regexMais = /^((mais)|(mas))$/i;
-    const regexMenu = /^((menu)|(princip))\w{0,3}$/i;
-
-    const isVoltar = regexVoltar.test(conteudoDaMsgMin);
-    const isMais = regexMais.test(conteudoDaMsgMin);
-    const isMenu = regexMenu.test(conteudoDaMsgMin);
-
-    let isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
-
-    if (isMenu) {
+    let isMessageMenu = msg.body.trim().toLowerCase() === "menu";
+    if (isMessageMenu) {
       users = utils.resetUser(msg.from, users);
     }
-    if (isVoltar || (userCurrentOrdem === 4 && !isSubgrupoIngressos)) {
-      userCurrentOrdem = users.get(msg.from).ordem;
-      if (userCurrentOrdem === 2) {
-        users = utils.decrementaOrdemUser(msg.from, users);
-        users = utils.decrementaOrdemEventos(msg.from, users);
+
+    let isMessageVoltar = msg.body.trim().toLowerCase() === "voltar";
+    if (isMessageVoltar) {
+      let ordemUser = users.get(msg.from).ordem;
+      switch (ordemUser) {
+        case 1:
+          utils.decrementaOrdemUser(msg.from, users);
+          users.set(msg.from, {
+            ...users.get(msg.from),
+            ordemEventos: 0,
+            eventoSelecionado: null,
+            infoSelecionada: null,
+            isSubgrupoIngressos: false,
+          });
+          break;
+        case 2:
+          utils.decrementaOrdemUser(msg.from, users);
+          users.set(msg.from, {
+            ...users.get(msg.from),
+            infoSelecionada: null,
+            isSubgrupoIngressos: false,
+          });
+          break;
+        case 3:
+          infoSelecionada = users.get(msg.from).infoSelecionada;
+          if (infoSelecionada.toLowerCase() === "ingressos") {
+            utils.decrementaOrdemUser(msg.from, users, 2);
+          } else {
+            utils.decrementaOrdemUser(msg.from, users, 2);
+            users.set(msg.from, {
+              ...users.get(msg.from),
+              infoSelecionada: null,
+              isSubgrupoIngressos: false,
+            });
+          }
+
+          break;
+        default:
+          console.log("Não foi possível atender ao comando de 'voltar'");
+          break;
       }
-      if (userCurrentOrdem === 3) {
-        let currentOrdemEventos = users.get(msg.from).ordemEventos;
-        users = utils.decrementaOrdemUser(msg.from, users, 2);
-        users = utils.decrementaOrdemEventos(
-          msg.from,
-          users,
-          currentOrdemEventos
+    }
+
+    let ordemUser = users.get(msg.from).ordem;
+    switch (ordemUser) {
+      case 0:
+        let isMessageMais = msg.body.trim().toLowerCase() === "mais";
+        if (isMessageMais) {
+          utils.incrementaOrdemEventos(msg.from, users);
+        }
+        let isSelecaoEventoValida = validators.validacaoSelecionaEvento(
+          msg,
+          planilha
         );
-        users.set(msg.from, {
-          ...users.get(msg.from),
-          eventoSelecionado: null,
-        });
-      }
 
-      if (userCurrentOrdem === 4) {
-        users = utils.decrementaOrdemUser(msg.from, users, 2);
-        users.set(users.get(msg.from), {
-          ...users.get(msg.from),
-          isSubgrupoIngressos: false,
-        });
-      }
-    }
+        if (isSelecaoEventoValida) {
+          users = user.setEventoSelecionado(msg, planilha, users);
 
-    userCurrentOrdem = users.get(msg.from).ordem;
-    let eventoSelecionado = users.get(msg.from).eventoSelecionado;
-
-    if (userCurrentOrdem === 1) {
-      let resposta;
-      [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
-      client
-        .sendMessage(msg.from, resposta)
-        .then(utils.incrementaOrdemUser(msg.from, users));
-    }
-    if (userCurrentOrdem === 2) {
-      if (isMais) {
-        utils.decrementaOrdemUser(msg.from, users);
-        utils.incrementaOrdemEventos(msg.from, users);
-        let resposta;
-        [resposta, users] = respostas.msgOrdemUm(planilha, msg, users);
-
-        client
-          .sendMessage(msg.from, resposta)
-          .then(utils.incrementaOrdemUser(msg.from, users));
-      } else {
-        let resposta;
-        [resposta, users] = respostas.msgOrdemDois(planilha, msg, users);
-        client
-          .sendMessage(msg.from, resposta)
-          .then((msgSent) => {
-            console.log(msgSent);
-            client.sendMessage(
-              msg.from,
-              'Digite "voltar" ou "menu" retornar ao menu principal e selecionar um novo evento.'
-            );
+          let resposta = respostas.msgInfosEvento(msg, users);
+          await client.sendMessage(msg.from, resposta);
+          utils.incrementaOrdemUser(msg.from, users);
+        } else {
+          let resposta;
+          resposta = respostas.msgApresentaEventos(planilha, msg, users);
+          await client.sendMessage(msg.from, resposta);
+        }
+        break;
+      case 1:
+        eventoSelecionado = users.get(msg.from).eventoSelecionado;
+        if (eventoSelecionado) {
+          let isSelecaoInfoValida = validators.validacaoSelecionaInfoEvento(
+            msg,
+            eventoSelecionado
+          );
+          if (isSelecaoInfoValida) {
+            users = user.setInfoSelecionada(msg, eventoSelecionado, users);
+            infoSelecionada = users.get(msg.from).infoSelecionada;
+            if (infoSelecionada.toLowerCase() === "ingressos")
+              utils.setSubgrupoIngressos(msg.from, users, true);
+            let resposta = respostas.msgInfoSelecionada(msg, users);
+            await client.sendMessage(msg.from, resposta);
             utils.incrementaOrdemUser(msg.from, users);
-          })
-          .catch((error) => {
-            console.log(error.message);
-          });
-      }
-    }
-    if (userCurrentOrdem === 3) {
-      let resposta;
-      [resposta, users] = respostas.msgOrdemTres(eventoSelecionado, msg, users);
-      client.sendMessage(msg.from, resposta).then((msgSent) => {
-        utils.incrementaOrdemUser(msg.from, users);
-        client.sendMessage(
-          msg.from,
-          respostas.msgVoltarEMenu(eventoSelecionado)
-        );
-      });
-    }
-    if (userCurrentOrdem === 4) {
-      isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
-      if (isSubgrupoIngressos) {
-        [resposta, users] = respostas
-          .msgSubgrupoIngressos(eventoSelecionado, msg, users)
-          .then((msgSent) => {
-            client.sendMessage(
-              msg.from,
-              respostas.msgVoltarEMenu(eventoSelecionado)
+          } else {
+            let isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
+            if (isSubgrupoIngressos) {
+              let resposta = respostas.msgInfoSelecionada(msg, users);
+              await client.sendMessage(msg.from, resposta);
+              utils.incrementaOrdemUser(msg.from, users);
+              return;
+            }
+            let resposta = respostas.msgInfosEvento(msg, users);
+            await client.sendMessage(msg.from, resposta);
+          }
+        }
+        break;
+      case 2:
+        let isSubgrupoIngressos = users.get(msg.from).isSubgrupoIngressos;
+        if (isSubgrupoIngressos) {
+          eventoSelecionado = users.get(msg.from).eventoSelecionado;
+          let isSelecaoTipoIngressoValida =
+            validators.validacaoSelecionaTipoIngresso(msg, eventoSelecionado);
+          if (isSelecaoTipoIngressoValida) {
+            let resposta = respostas.msgSubgrupoIngressos(
+              msg,
+              eventoSelecionado
             );
-          });
-      }
-
-      /*
-      let resposta;
-      resposta = respostas.msgOrdemQuatro(eventoSelecionado);
-      client.sendMessage(msg.from, resposta);
-      */
+            await client.sendMessage(msg.from, resposta);
+            utils.incrementaOrdemUser(msg.from, users);
+          } else {
+            // Mandar mensagem dos tipos de ingresso
+            let resposta = respostas.msgSubgrupoIngressos(
+              msg,
+              eventoSelecionado
+            );
+            await client.sendMessage(msg.from, resposta);
+          }
+        } else {
+          eventoSelecionado = users.get(msg.from).eventoSelecionado;
+          let resposta = respostas.msgVoltarEMenu(eventoSelecionado);
+          await client.sendMessage(msg.from, resposta);
+        }
+        break;
+      case 3:
+        eventoSelecionado = users.get(msg.from).eventoSelecionado;
+        let resposta = respostas.msgVoltarEMenu(eventoSelecionado);
+        await client.sendMessage(msg.from, resposta);
+        break;
     }
-  } else {
-    return;
   }
 });
 
 client.initialize();
-
-module.exports = { users };
