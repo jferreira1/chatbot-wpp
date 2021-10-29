@@ -65,7 +65,7 @@ const msgInfosEvento = (msg, users) => {
     resposta = error.message;
   } finally {
     let footer =
-      '\nDigite "voltar" ou "menu" para voltar à seleção de eventos.';
+      '\n\nDigite "voltar" ou "menu" para voltar à seleção de eventos.';
     resposta += footer;
     return resposta;
   }
@@ -122,7 +122,7 @@ const msgInfoSelecionada = (msg, users) => {
     resposta = error.message;
   } finally {
     let footer =
-      '\nDigite "voltar" para retornar ao menu de informações ou digite "menu" para voltar ao menu inicial.';
+      '\n\nDigite "voltar" para retornar ao menu de informações ou digite "menu" para voltar ao menu inicial.';
     resposta += footer;
     return resposta;
   }
@@ -177,8 +177,6 @@ const msgSubgrupoIngressos = (msg, eventoSelecionado) => {
       let lojaParceira = "LojaParceira";
       let enderecoLojaParceira = "Shopping X, Centro - Rio de Janeiro";
       let fraseLojasParceiras = `\n*Compras nas lojas físicas!* \n${lojaParceira}: ${enderecoLojaParceira}`;
-      let footer =
-        '\nDigite "voltar" para voltar ao menu de informações ou digite "menu" para voltar ao menu principal.';
       resposta =
         fraseIngressoAntecipado + fraseLink + fraseLojasParceiras + footer;
     }
@@ -197,7 +195,7 @@ const msgSubgrupoIngressos = (msg, eventoSelecionado) => {
     resposta = error.message;
   } finally {
     let footer =
-      '\nDigite "voltar" para retornar ao menu de ingressos ou digite "menu" para voltar ao menu inicial.';
+      '\n\nDigite "voltar" para retornar ao menu de ingressos ou digite "menu" para voltar ao menu inicial.';
     resposta += footer;
     return resposta;
   }
