@@ -21,7 +21,9 @@ app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 });
 
-const SESSION_FILE_PATH = "./session.json";
+app.use(express.static("archives"));
+
+const SESSION_FILE_PATH = "./archives/session.json";
 
 let sessionData;
 if (fs.existsSync(SESSION_FILE_PATH)) {
@@ -61,7 +63,7 @@ let users = new Map();
 
 client.on("ready", () => {
   try {
-    const workbook = XLSX.readFile("./archives/teste_evento2.xlsx");
+    const workbook = XLSX.readFile("./archives/planilha_eventos.xlsx");
     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
     planilha = XLSX.utils.sheet_to_json(worksheet);
     planilha = planilha.filter((linha) => {
