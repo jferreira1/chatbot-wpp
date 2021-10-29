@@ -21,7 +21,7 @@ app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 });
 
-app.use(express.static("archives"));
+//app.use(express.static("archives"));
 
 const SESSION_FILE_PATH = "./archives/session.json";
 
@@ -221,11 +221,8 @@ client.on("message", async (msg) => {
             await client.sendMessage(msg.from, resposta);
             utils.incrementaOrdemUser(msg.from, users);
           } else {
-            // Mandar mensagem dos tipos de ingresso
-            let resposta = respostas.msgSubgrupoIngressos(
-              msg,
-              eventoSelecionado
-            );
+            // Mensagem inválida, repete a resposta da informação selecionada;
+            let resposta = respostas.msgInfoSelecionada(msg, eventoSelecionado);
             await client.sendMessage(msg.from, resposta);
           }
         } else {
